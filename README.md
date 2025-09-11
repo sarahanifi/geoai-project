@@ -1,3 +1,5 @@
+# Land‑Cover Classification in Google Earth Engine
+
 This project shows how I used Google Earth Engine to classify land cover in a small area near Lund using satellite images. I wanted to identify four types of land: water, built‑up areas, vegetation, and bare soil.
 
 How It Works
