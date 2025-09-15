@@ -1,4 +1,4 @@
-// Define AOI as a polygon
+
 var aoi = ee.Geometry.Polygon([
   [
     [13.170261646955689, 55.685449151953485],
@@ -8,15 +8,13 @@ var aoi = ee.Geometry.Polygon([
     [13.181290890424927, 55.68953754120591],
     [13.172192837446412, 55.690553524289925],
     [13.16772964164563, 55.68922306490095],
-    [13.170261646955689, 55.685449151953485]  // close the polygon
+    [13.170261646955689, 55.685449151953485]  
   ]
 ]);
 
-// Center the map on AOI
 Map.centerObject(aoi, 14);
 
-var aoi = geometry;   // use the polygon you drew
-// Use your drawn AOI
+var aoi = geometry;   
 var region = aoi;
 
 // Load Sentinel-2 surface reflectance data (summer 2024)
@@ -27,7 +25,6 @@ var s2 = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED')
   .median()
   .clip(region);
 
-// Calculate NDVI as a simple test
 var ndvi = s2.normalizedDifference(['B8', 'B4']).rename('NDVI');
 
 // Add NDVI layer to the map
@@ -36,7 +33,7 @@ Map.addLayer(ndvi, {min:0, max:1, palette:['white','green']}, 'NDVI');
 // ========= 1) REGION =========
 var region = aoi;  // uses your drawn polygon
 
-// ========= 2) SENTINEL-2 (L2A) CLOUD-MASK + COMPOSITE =========
+//  SENTINEL-2 (L2A) CLOUD-MASK + COMPOSITE 
 function maskS2clouds(img) {
   var scl = img.select('SCL');
   var mask = scl.neq(3) // cloud shadow
@@ -57,7 +54,7 @@ var s2 = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED')
 
 var comp = s2.median().clip(region);
 
-// ========= 3) FEATURES (BANDS + INDICES) =========
+//FEATURES 
 var ndvi = comp.normalizedDifference(['B8','B4']).rename('NDVI');
 var ndwi = comp.normalizedDifference(['B3','B8']).rename('NDWI');
 var mndwi = comp.normalizedDifference(['B3','B11']).rename('MNDWI');
@@ -68,8 +65,7 @@ var feats = comp.select(['B2','B3','B4','B8','B11','B12'])
 
 var bandNames = ['B2','B3','B4','B8','B11','B12','NDVI','NDWI','MNDWI','NDBI'];
 
-// ========= 4) LABELS FROM ESA WORLDCOVER (SIMPLIFIED TO 4 CLASSES) =========
-// If v200 errors, change to 'ESA/WorldCover/v100'
+// LABELS FROM ESA WORLDCOVER 
 var wc = ee.ImageCollection('ESA/WorldCover/v200').first().select('Map').clip(region);
 
 // Map ESA classes to 4 super-classes: 0 Water, 1 Built, 2 Vegetation, 3 Bare
@@ -78,14 +74,14 @@ var label = wc.remap(
   [ 0,  1,  2,  2,   2,   2,   3]
 ).rename('label');
 
-// ========= 5) SAMPLE, SPLIT, TRAIN RF =========
+// SAMPLE, SPLIT, TRAIN RF 
 var samples = feats.addBands(label).stratifiedSample({
-  numPoints: 4000,               // enough but still quick
+  numPoints: 4000,              
   classBand: 'label',
   region: region,
   scale: 10,
   classValues: [0,1,2,3],
-  classPoints: [800,800,2000,400],  // more vegetation samples
+  classPoints: [800,800,2000,400],  
   geometries: true,
   seed: 42
 });
@@ -98,7 +94,7 @@ var test  = withRand.filter(ee.Filter.gte('rand', split));
 var rf = ee.Classifier.smileRandomForest({numberOfTrees: 200})
   .train({features: train, classProperty: 'label', inputProperties: bandNames});
 
-// ========= 6) CLASSIFY + ACCURACY =========
+ 6) CLASSIFY + ACCURACY 
 var classified = feats.select(bandNames).classify(rf).clip(region);
 
 var testClassified = test.classify(rf);
@@ -106,12 +102,12 @@ var cm = testClassified.errorMatrix('label', 'classification');
 print('Confusion Matrix', cm);
 print('Overall Accuracy', cm.accuracy());
 
-// ========= 7) DISPLAY =========
+// DISPLAY
 Map.centerObject(region, 11);
 var palette = ['3F88C5','D00000','2E7D32','C2B280']; // water, built, vegetation, bare
 Map.addLayer(classified, {min:0, max:3, palette: palette}, 'Land cover (RF)');
 
-// ========= 8) AREA BY CLASS (km²) =========
+//  AREA BY CLASS (km²)
 var areaImg = ee.Image.pixelArea().divide(1e6).addBands(classified);
 var areas = areaImg.reduceRegion({
   reducer: ee.Reducer.sum().group({groupField: 1, groupName: 'class'}),
@@ -119,7 +115,6 @@ var areas = areaImg.reduceRegion({
 });
 print('Area (km²) by class', areas);
 
-// ========= 9) EXPORT (OPTIONAL) =========
 Export.image.toDrive({
   image: classified.toByte(),
   description: 'RF_LandCover_10m',
@@ -128,7 +123,7 @@ Export.image.toDrive({
   maxPixels: 1e13
 });
 Export.image.toDrive({
-  image: classified.toByte().clip(region),   // 👈 Clip to AOI polygon
+  image: classified.toByte().clip(region),   // 
   description: 'RF_LandCover_10m',
   region: region,
   scale: 10,
